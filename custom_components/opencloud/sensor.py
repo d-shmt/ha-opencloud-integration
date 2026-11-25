@@ -114,7 +114,11 @@ DRIVE_SENSORS: tuple[OpenCloudDriveSensorDescription, ...] = (
         device_class=SensorDeviceClass.ENUM,
         options=QUOTA_STATES,
         icon="mdi:gauge",
-        value_fn=lambda drive: drive.quota.state,
+        value_fn=lambda drive: (
+            drive.quota.state.lower()
+            if drive.quota.state and drive.quota.state.lower() in QUOTA_STATES
+            else None
+        ),
     ),
 )
 
