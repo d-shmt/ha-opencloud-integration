@@ -1,0 +1,102 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Mit OpenCloud verbinden",
+        "description": "Gib die URL deiner OpenCloud-Instanz ein und wähle die Authentifizierungsmethode.",
+        "data": {
+          "url": "OpenCloud-URL",
+          "auth_type": "Authentifizierungsmethode",
+          "verify_ssl": "SSL-Zertifikat prüfen"
+        },
+        "data_description": {
+          "url": "Vollständige URL inklusive https:// (z. B. https://cloud.example.com)",
+          "verify_ssl": "Nur bei selbstsignierten Zertifikaten deaktivieren"
+        }
+      },
+      "credentials": {
+        "title": "OpenCloud-Zugangsdaten",
+        "description": "Gib deine Zugangsdaten ein. Empfohlen wird ein OpenCloud App-Token (auth-app).",
+        "data": {
+          "username": "Benutzername",
+          "password": "App-Token / Passwort",
+          "token": "Bearer-Token"
+        }
+      },
+      "reauth_confirm": {
+        "title": "OpenCloud erneut authentifizieren",
+        "description": "Deine OpenCloud-Zugangsdaten sind nicht mehr gültig. Bitte gib aktualisierte Zugangsdaten ein.",
+        "data": {
+          "username": "Benutzername",
+          "password": "App-Token / Passwort",
+          "token": "Bearer-Token"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Bitte gib eine gültige http://- oder https://-URL ein.",
+      "invalid_auth": "Benutzername, Passwort oder Token ist ungültig.",
+      "cannot_connect": "Verbindung zu OpenCloud fehlgeschlagen. Prüfe URL und Netzwerk.",
+      "unknown": "Ein unerwarteter Fehler ist aufgetreten."
+    },
+    "abort": {
+      "already_configured": "Dieser OpenCloud-Account ist bereits eingerichtet.",
+      "reauth_successful": "Erneute Authentifizierung erfolgreich."
+    }
+  },
+  "selector": {
+    "auth_type": {
+      "options": {
+        "basic": "Benutzername & App-Token / Passwort (Basic Auth)",
+        "token": "Bearer-Token (OIDC / API-Token)"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "OpenCloud-Optionen",
+        "data": {
+          "scan_interval": "Abfrageintervall (Sekunden)",
+          "verify_ssl": "SSL-Zertifikat prüfen"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "drive_count": {
+        "name": "Spaces"
+      },
+      "version": {
+        "name": "Version"
+      },
+      "used_space": {
+        "name": "Belegter Speicher"
+      },
+      "remaining_space": {
+        "name": "Freier Speicher"
+      },
+      "total_space": {
+        "name": "Gesamtkapazität"
+      },
+      "usage_percent": {
+        "name": "Auslastung"
+      },
+      "quota_state": {
+        "name": "Quota-Status",
+        "state": {
+          "normal": "Normal",
+          "nearing": "Fast voll",
+          "critical": "Kritisch",
+          "exceeded": "Überschritten"
+        }
+      }
+    },
+    "binary_sensor": {
+      "connectivity": {
+        "name": "Server-Status"
+      }
+    }
+  }
+}

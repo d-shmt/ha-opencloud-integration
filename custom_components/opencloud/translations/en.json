@@ -1,0 +1,102 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to OpenCloud",
+        "description": "Enter the URL of your OpenCloud instance and choose how Home Assistant should authenticate.",
+        "data": {
+          "url": "OpenCloud URL",
+          "auth_type": "Authentication method",
+          "verify_ssl": "Verify SSL certificate"
+        },
+        "data_description": {
+          "url": "Full URL including https:// (e.g. https://cloud.example.com)",
+          "verify_ssl": "Disable only if using a self-signed certificate"
+        }
+      },
+      "credentials": {
+        "title": "OpenCloud Credentials",
+        "description": "Enter your OpenCloud credentials. Using an App Token (auth-app) is recommended.",
+        "data": {
+          "username": "Username",
+          "password": "App Token / Password",
+          "token": "Bearer Token"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate OpenCloud",
+        "description": "Your OpenCloud credentials are no longer valid. Please enter updated credentials.",
+        "data": {
+          "username": "Username",
+          "password": "App Token / Password",
+          "token": "Bearer Token"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Please enter a valid http:// or https:// URL.",
+      "invalid_auth": "Invalid username, password, or token.",
+      "cannot_connect": "Could not connect to OpenCloud. Check the URL and network.",
+      "unknown": "Unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This OpenCloud account is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "selector": {
+    "auth_type": {
+      "options": {
+        "basic": "Username & App Token / Password (Basic Auth)",
+        "token": "Bearer Token (OIDC / API Token)"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "OpenCloud Options",
+        "data": {
+          "scan_interval": "Update interval (seconds)",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "drive_count": {
+        "name": "Spaces"
+      },
+      "version": {
+        "name": "Version"
+      },
+      "used_space": {
+        "name": "Used space"
+      },
+      "remaining_space": {
+        "name": "Free space"
+      },
+      "total_space": {
+        "name": "Total quota"
+      },
+      "usage_percent": {
+        "name": "Usage"
+      },
+      "quota_state": {
+        "name": "Quota status",
+        "state": {
+          "normal": "Normal",
+          "nearing": "Nearing limit",
+          "critical": "Critical",
+          "exceeded": "Exceeded"
+        }
+      }
+    },
+    "binary_sensor": {
+      "connectivity": {
+        "name": "Server status"
+      }
+    }
+  }
+}
