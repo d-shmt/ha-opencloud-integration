@@ -200,9 +200,10 @@ class OpenCloudApiClient:
         return self._cached_release
 
     async def async_get_server_info(self) -> OpenCloudServerInfo | None:
-        """Fetch server version metadata from status.php/status/config.json."""
+        """Fetch server version metadata from status or capabilities endpoints."""
         version: str | None = None
         edition: str | None = None
+
         for path in ("/status.php", "/status", "/config.json"):
             try:
                 data = await self._request_json(path, allow_not_found=True)
@@ -210,7 +211,8 @@ class OpenCloudApiClient:
                 continue
             if isinstance(data, dict):
                 raw_version = (
-                    data.get("productVersion")
+                    data.get("productversion")
+                    or data.get("productVersion")
                     or data.get("versionstring")
                     or data.get("version")
                 )
@@ -223,6 +225,34 @@ class OpenCloudApiClient:
                     version = str(raw_version).lstrip("v") if raw_version else None
                     edition = str(raw_edition) if raw_edition else None
                     break
+
+        # Prefer productversion from OCS capabilities if status only returned legacy 10.x
+        try:
+            caps = await self._request_json(
+                "/ocs/v1.php/cloud/capabilities?format=json", allow_not_found=True
+            )
+        except OpenCloudConnectionError:
+            caps = None
+        if isinstance(caps, dict):
+            core_status = (
+                caps.get("ocs", {})
+                .get("data", {})
+                .get("capabilities", {})
+                .get("core", {})
+                .get("status", {})
+            )
+            if isinstance(core_status, dict):
+                ocs_version = core_status.get("productversion") or core_status.get(
+                    "productVersion"
+                )
+                if ocs_version:
+                    version = str(ocs_version).lstrip("v")
+                if not edition:
+                    raw_ed = core_status.get("edition") or core_status.get(
+                        "productname"
+                    )
+                    if raw_ed:
+                        edition = str(raw_ed)
 
         if not version and not edition:
             return None
