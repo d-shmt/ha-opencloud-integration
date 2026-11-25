@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import time
 from typing import Any
 
 import aiohttp
 
-from .const import AUTH_TYPE_BASIC, AUTH_TYPE_TOKEN
+from .const import (
+    AUTH_TYPE_BASIC,
+    AUTH_TYPE_TOKEN,
+    GITHUB_RELEASES_URL,
+    UPDATE_CHECK_INTERVAL,
+)
 
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=15)
 
@@ -48,10 +54,13 @@ class OpenCloudDrive:
 
 @dataclass(slots=True, frozen=True)
 class OpenCloudServerInfo:
-    """Optional server metadata."""
+    """Optional server metadata and latest release info."""
 
     version: str | None
     edition: str | None
+    latest_version: str | None = None
+    release_url: str | None = None
+    release_summary: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -83,6 +92,12 @@ class OpenCloudApiClient:
         self._password = password
         self._token = token
         self._ssl: bool | None = None if verify_ssl else False
+        self._last_release_check: float = 0.0
+        self._cached_release: tuple[str | None, str | None, str | None] = (
+            None,
+            None,
+            None,
+        )
 
     def _build_auth_kwargs(self) -> dict[str, Any]:
         """Build aiohttp auth/header arguments."""
@@ -148,22 +163,80 @@ class OpenCloudApiClient:
             )
         return drives
 
+    async def async_get_latest_release(self) -> tuple[str | None, str | None, str | None]:
+        """Fetch latest OpenCloud release metadata from GitHub (cached)."""
+        now = time.monotonic()
+        if (
+            self._last_release_check > 0
+            and (now - self._last_release_check) < UPDATE_CHECK_INTERVAL
+        ):
+            return self._cached_release
+
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "ha-opencloud-integration",
+        }
+        try:
+            async with self._session.get(
+                GITHUB_RELEASES_URL, headers=headers, timeout=REQUEST_TIMEOUT
+            ) as response:
+                if response.status != 200:
+                    return self._cached_release
+                data = await response.json(content_type=None)
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+            return self._cached_release
+
+        if not isinstance(data, dict):
+            return self._cached_release
+
+        tag = data.get("tag_name")
+        latest_version = str(tag).lstrip("v") if tag else None
+        release_url = data.get("html_url")
+        body = data.get("body")
+        summary = str(body).strip()[:255] if body else None
+
+        self._cached_release = (latest_version, release_url, summary)
+        self._last_release_check = now
+        return self._cached_release
+
     async def async_get_server_info(self) -> OpenCloudServerInfo | None:
-        """Fetch optional server version metadata from status.php or config.json."""
-        for path in ("/status.php", "/config.json"):
+        """Fetch server version metadata from status.php/status/config.json."""
+        version: str | None = None
+        edition: str | None = None
+        for path in ("/status.php", "/status", "/config.json"):
             try:
                 data = await self._request_json(path, allow_not_found=True)
             except OpenCloudConnectionError:
                 continue
             if isinstance(data, dict):
-                version = data.get("versionstring") or data.get("version")
-                edition = data.get("edition") or data.get("productname")
-                if version or edition:
-                    return OpenCloudServerInfo(
-                        version=str(version) if version else None,
-                        edition=str(edition) if edition else None,
-                    )
-        return None
+                raw_version = (
+                    data.get("productVersion")
+                    or data.get("versionstring")
+                    or data.get("version")
+                )
+                raw_edition = (
+                    data.get("edition")
+                    or data.get("productName")
+                    or data.get("productname")
+                )
+                if raw_version or raw_edition:
+                    version = str(raw_version).lstrip("v") if raw_version else None
+                    edition = str(raw_edition) if raw_edition else None
+                    break
+
+        if not version and not edition:
+            return None
+
+        latest_version, release_url, release_summary = (
+            await self.async_get_latest_release()
+        )
+        return OpenCloudServerInfo(
+            version=version,
+            edition=edition,
+            latest_version=latest_version,
+            release_url=release_url,
+            release_summary=release_summary,
+        )
 
     async def async_get_data(self) -> OpenCloudData:
         """Fetch drives and optional server info."""

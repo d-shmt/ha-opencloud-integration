@@ -6,7 +6,10 @@ from homeassistant.const import Platform
 
 DOMAIN = "opencloud"
 
-PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.UPDATE]
+
+GITHUB_RELEASES_URL = "https://api.github.com/repos/opencloud-eu/opencloud/releases/latest"
+UPDATE_CHECK_INTERVAL = 21600
 
 CONF_AUTH_TYPE = "auth_type"
 CONF_DRIVE_TYPES = "drive_types"

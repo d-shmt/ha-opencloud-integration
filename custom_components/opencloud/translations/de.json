@@ -130,6 +130,11 @@
       "connectivity": {
         "name": "Server-Status"
       }
+    },
+    "update": {
+      "server_update": {
+        "name": "OpenCloud-Update"
+      }
     }
   }
 }
