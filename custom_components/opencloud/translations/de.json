@@ -23,11 +23,20 @@
           "token": "Bearer-Token"
         }
       },
-      "drives": {
-        "title": "OpenCloud-Bereiche auswählen",
-        "description": "Wähle aus, welche OpenCloud-Bereiche als Geräte und Sensoren integriert werden sollen.",
+      "drive_categories": {
+        "title": "OpenCloud-Bereiche auswählen (Schritt 1/2)",
+        "description": "Wähle aus, welche OpenCloud-Bereiche grundsätzlich erfasst werden sollen.",
         "data": {
-          "drive_types": "Zu integrierende Bereiche"
+          "include_personal": "Persönlich",
+          "include_spaces": "Spaces (Projekt-Spaces)",
+          "include_shares": "Shares (Geteilte Bereiche)"
+        }
+      },
+      "drives": {
+        "title": "Konkrete Spaces & Drives auswählen (Schritt 2/2)",
+        "description": "Verfeinere die Auswahl: Welche einzelnen Drives oder Spaces sollen in Home Assistant integriert werden?",
+        "data": {
+          "selected_drives": "Zu integrierende Drives / Spaces"
         }
       },
       "reauth_confirm": {
@@ -69,11 +78,20 @@
   "options": {
     "step": {
       "init": {
-        "title": "OpenCloud-Optionen",
+        "title": "OpenCloud-Optionen (Schritt 1/2)",
         "data": {
-          "drive_types": "Zu integrierende Bereiche",
+          "include_personal": "Persönlich",
+          "include_spaces": "Spaces (Projekt-Spaces)",
+          "include_shares": "Shares (Geteilte Bereiche)",
           "scan_interval": "Abfrageintervall (Sekunden)",
           "verify_ssl": "SSL-Zertifikat prüfen"
+        }
+      },
+      "drives": {
+        "title": "Konkrete Spaces & Drives auswählen (Schritt 2/2)",
+        "description": "Verfeinere die Auswahl: Welche einzelnen Drives oder Spaces sollen integriert werden?",
+        "data": {
+          "selected_drives": "Zu integrierende Drives / Spaces"
         }
       }
     }

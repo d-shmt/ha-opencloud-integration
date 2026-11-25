@@ -20,6 +20,7 @@ from .api import (
 from .const import (
     ALL_DRIVE_CATEGORIES,
     CONF_DRIVE_TYPES,
+    CONF_SELECTED_DRIVES,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     DRIVE_CATEGORY_SPACES,
@@ -65,16 +66,30 @@ class OpenCloudDataUpdateCoordinator(DataUpdateCoordinator[OpenCloudData]):
         except OpenCloudApiError as err:
             raise UpdateFailed(f"Error fetching OpenCloud data: {err}") from err
 
-        selected_categories = set(
-            self.config_entry.options.get(
-                CONF_DRIVE_TYPES,
-                self.config_entry.data.get(CONF_DRIVE_TYPES, ALL_DRIVE_CATEGORIES),
-            )
+        selected_drives = self.config_entry.options.get(
+            CONF_SELECTED_DRIVES,
+            self.config_entry.data.get(CONF_SELECTED_DRIVES),
         )
-        filtered_drives = {
-            drive_id: drive
-            for drive_id, drive in data.drives.items()
-            if DRIVE_TYPE_TO_CATEGORY.get(drive.drive_type.lower(), DRIVE_CATEGORY_SPACES)
-            in selected_categories
-        }
+        if selected_drives is not None:
+            allowed_ids = set(selected_drives)
+            filtered_drives = {
+                drive_id: drive
+                for drive_id, drive in data.drives.items()
+                if drive_id in allowed_ids
+            }
+        else:
+            selected_categories = set(
+                self.config_entry.options.get(
+                    CONF_DRIVE_TYPES,
+                    self.config_entry.data.get(CONF_DRIVE_TYPES, ALL_DRIVE_CATEGORIES),
+                )
+            )
+            filtered_drives = {
+                drive_id: drive
+                for drive_id, drive in data.drives.items()
+                if DRIVE_TYPE_TO_CATEGORY.get(
+                    drive.drive_type.lower(), DRIVE_CATEGORY_SPACES
+                )
+                in selected_categories
+            }
         return OpenCloudData(drives=filtered_drives, server_info=data.server_info)

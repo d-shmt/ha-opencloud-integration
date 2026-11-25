@@ -23,11 +23,20 @@
           "token": "Bearer Token"
         }
       },
-      "drives": {
-        "title": "Select OpenCloud Areas",
-        "description": "Choose which OpenCloud storage areas should be integrated as devices and sensors.",
+      "drive_categories": {
+        "title": "Select OpenCloud Areas (Step 1/2)",
+        "description": "Choose which OpenCloud storage areas you want to integrate.",
         "data": {
-          "drive_types": "Areas to integrate"
+          "include_personal": "Personal",
+          "include_spaces": "Spaces (Project Spaces)",
+          "include_shares": "Shares"
+        }
+      },
+      "drives": {
+        "title": "Select Specific Drives & Spaces (Step 2/2)",
+        "description": "Refine which individual drives or spaces should be added to Home Assistant.",
+        "data": {
+          "selected_drives": "Drives / Spaces to integrate"
         }
       },
       "reauth_confirm": {
@@ -69,11 +78,20 @@
   "options": {
     "step": {
       "init": {
-        "title": "OpenCloud Options",
+        "title": "OpenCloud Options (Step 1/2)",
         "data": {
-          "drive_types": "Areas to integrate",
+          "include_personal": "Personal",
+          "include_spaces": "Spaces (Project Spaces)",
+          "include_shares": "Shares",
           "scan_interval": "Update interval (seconds)",
           "verify_ssl": "Verify SSL certificate"
+        }
+      },
+      "drives": {
+        "title": "Select Specific Drives & Spaces (Step 2/2)",
+        "description": "Refine which individual drives or spaces should be integrated.",
+        "data": {
+          "selected_drives": "Drives / Spaces to integrate"
         }
       }
     }

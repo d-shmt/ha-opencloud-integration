@@ -10,6 +10,10 @@ PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
 CONF_AUTH_TYPE = "auth_type"
 CONF_DRIVE_TYPES = "drive_types"
+CONF_INCLUDE_PERSONAL = "include_personal"
+CONF_INCLUDE_SHARES = "include_shares"
+CONF_INCLUDE_SPACES = "include_spaces"
+CONF_SELECTED_DRIVES = "selected_drives"
 CONF_TOKEN = "token"
 
 AUTH_TYPE_BASIC = "basic"

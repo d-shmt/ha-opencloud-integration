@@ -21,7 +21,7 @@ from homeassistant.const import (
     CONF_USERNAME,
     CONF_VERIFY_SSL,
 )
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     SelectOptionDict,
@@ -34,6 +34,7 @@ from .api import (
     OpenCloudApiClient,
     OpenCloudAuthError,
     OpenCloudConnectionError,
+    OpenCloudDrive,
 )
 from .const import (
     ALL_DRIVE_CATEGORIES,
@@ -41,6 +42,10 @@ from .const import (
     AUTH_TYPE_TOKEN,
     CONF_AUTH_TYPE,
     CONF_DRIVE_TYPES,
+    CONF_INCLUDE_PERSONAL,
+    CONF_INCLUDE_SHARES,
+    CONF_INCLUDE_SPACES,
+    CONF_SELECTED_DRIVES,
     CONF_TOKEN,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_VERIFY_SSL,
@@ -48,6 +53,7 @@ from .const import (
     DRIVE_CATEGORY_PERSONAL,
     DRIVE_CATEGORY_SHARES,
     DRIVE_CATEGORY_SPACES,
+    DRIVE_TYPE_TO_CATEGORY,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
 )
@@ -66,18 +72,59 @@ def _is_valid_url(url: str) -> bool:
     return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
-def _build_drive_types_selector() -> SelectSelector:
-    """Build multi-select selector for OpenCloud drive categories."""
+def _create_client(hass: HomeAssistant, data: dict[str, Any]) -> OpenCloudApiClient:
+    """Build an OpenCloudApiClient from config/options data."""
+    verify_ssl = data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
+    session = async_get_clientsession(hass, verify_ssl=verify_ssl)
+    return OpenCloudApiClient(
+        session=session,
+        base_url=data[CONF_URL],
+        auth_type=data.get(CONF_AUTH_TYPE, AUTH_TYPE_BASIC),
+        username=data.get(CONF_USERNAME),
+        password=data.get(CONF_PASSWORD),
+        token=data.get(CONF_TOKEN),
+        verify_ssl=verify_ssl,
+    )
+
+
+def _categories_from_flags(data: dict[str, Any]) -> list[str]:
+    """Convert boolean area toggles into drive category list."""
+    categories: list[str] = []
+    if data.get(CONF_INCLUDE_PERSONAL, True):
+        categories.append(DRIVE_CATEGORY_PERSONAL)
+    if data.get(CONF_INCLUDE_SPACES, True):
+        categories.append(DRIVE_CATEGORY_SPACES)
+    if data.get(CONF_INCLUDE_SHARES, False):
+        categories.append(DRIVE_CATEGORY_SHARES)
+    return categories
+
+
+def _filter_drives_by_categories(
+    drives: list[OpenCloudDrive], categories: list[str]
+) -> list[OpenCloudDrive]:
+    """Filter drives belonging to the selected categories."""
+    allowed = set(categories)
+    return [
+        drive
+        for drive in drives
+        if DRIVE_TYPE_TO_CATEGORY.get(drive.drive_type.lower(), DRIVE_CATEGORY_SPACES)
+        in allowed
+    ]
+
+
+def _build_drives_selector(drives: list[OpenCloudDrive]) -> SelectSelector:
+    """Build a multi-select list for individual OpenCloud drives."""
     return SelectSelector(
         SelectSelectorConfig(
             options=[
-                SelectOptionDict(value=DRIVE_CATEGORY_PERSONAL, label="personal"),
-                SelectOptionDict(value=DRIVE_CATEGORY_SPACES, label="spaces"),
-                SelectOptionDict(value=DRIVE_CATEGORY_SHARES, label="shares"),
+                SelectOptionDict(
+                    value=drive.drive_id,
+                    label=f"{drive.name} ({drive.drive_type})",
+                )
+                for drive in drives
             ],
             multiple=True,
             mode=SelectSelectorMode.LIST,
-            translation_key="drive_types",
         )
     )
 
@@ -90,6 +137,7 @@ class OpenCloudConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Initialize the config flow."""
         self._user_input: dict[str, Any] = {}
+        self._discovered_drives: list[OpenCloudDrive] = []
         self._reauth_entry: ConfigEntry | None = None
 
     @staticmethod
@@ -143,7 +191,7 @@ class OpenCloudConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             data = {**self._user_input, **user_input}
-            error = await self._async_validate_input(data)
+            error, drives = await self._async_validate_input(data)
             if error:
                 errors["base"] = error
             else:
@@ -153,7 +201,8 @@ class OpenCloudConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
 
                 self._user_input = data
-                return await self.async_step_drives()
+                self._discovered_drives = drives
+                return await self.async_step_drive_categories()
 
         if auth_type == AUTH_TYPE_TOKEN:
             schema = vol.Schema({vol.Required(CONF_TOKEN): str})
@@ -171,23 +220,55 @@ class OpenCloudConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_drive_categories(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Step 1 of selection: choose which OpenCloud areas to integrate."""
+        if user_input is not None:
+            categories = _categories_from_flags(user_input)
+            self._user_input[CONF_INCLUDE_PERSONAL] = user_input[CONF_INCLUDE_PERSONAL]
+            self._user_input[CONF_INCLUDE_SPACES] = user_input[CONF_INCLUDE_SPACES]
+            self._user_input[CONF_INCLUDE_SHARES] = user_input[CONF_INCLUDE_SHARES]
+            self._user_input[CONF_DRIVE_TYPES] = categories
+            return await self.async_step_drives()
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_INCLUDE_PERSONAL, default=True): bool,
+                vol.Required(CONF_INCLUDE_SPACES, default=True): bool,
+                vol.Required(CONF_INCLUDE_SHARES, default=False): bool,
+            }
+        )
+        return self.async_show_form(step_id="drive_categories", data_schema=schema)
+
     async def async_step_drives(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Select which OpenCloud drive categories to integrate."""
+        """Step 2 of selection: refine individual drives/spaces."""
+        matching_drives = _filter_drives_by_categories(
+            self._discovered_drives,
+            self._user_input.get(CONF_DRIVE_TYPES, ALL_DRIVE_CATEGORIES),
+        )
+
+        if not matching_drives:
+            data = {**self._user_input, CONF_SELECTED_DRIVES: []}
+            host = urlparse(data[CONF_URL]).netloc
+            return self.async_create_entry(title=f"OpenCloud ({host})", data=data)
+
         if user_input is not None:
             data = {
                 **self._user_input,
-                CONF_DRIVE_TYPES: user_input.get(CONF_DRIVE_TYPES, ALL_DRIVE_CATEGORIES),
+                CONF_SELECTED_DRIVES: user_input.get(CONF_SELECTED_DRIVES, []),
             }
             host = urlparse(data[CONF_URL]).netloc
             return self.async_create_entry(title=f"OpenCloud ({host})", data=data)
 
+        default_ids = [drive.drive_id for drive in matching_drives]
         schema = vol.Schema(
             {
                 vol.Required(
-                    CONF_DRIVE_TYPES, default=ALL_DRIVE_CATEGORIES
-                ): _build_drive_types_selector(),
+                    CONF_SELECTED_DRIVES, default=default_ids
+                ): _build_drives_selector(matching_drives),
             }
         )
         return self.async_show_form(step_id="drives", data_schema=schema)
@@ -211,7 +292,7 @@ class OpenCloudConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             updated_data = {**self._reauth_entry.data, **user_input}
-            error = await self._async_validate_input(updated_data)
+            error, _ = await self._async_validate_input(updated_data)
             if error:
                 errors["base"] = error
             else:
@@ -239,41 +320,78 @@ class OpenCloudConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def _async_validate_input(self, data: dict[str, Any]) -> str | None:
-        """Validate connection to OpenCloud and return an error key on failure."""
-        verify_ssl = data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
-        session = async_get_clientsession(self.hass, verify_ssl=verify_ssl)
-        client = OpenCloudApiClient(
-            session=session,
-            base_url=data[CONF_URL],
-            auth_type=data.get(CONF_AUTH_TYPE, AUTH_TYPE_BASIC),
-            username=data.get(CONF_USERNAME),
-            password=data.get(CONF_PASSWORD),
-            token=data.get(CONF_TOKEN),
-            verify_ssl=verify_ssl,
-        )
+    async def _async_validate_input(
+        self, data: dict[str, Any]
+    ) -> tuple[str | None, list[OpenCloudDrive]]:
+        """Validate connection to OpenCloud and return (error_key, drives)."""
+        client = _create_client(self.hass, data)
         try:
-            await client.async_validate_connection()
+            drives = await client.async_validate_connection()
         except OpenCloudAuthError:
-            return "invalid_auth"
+            return "invalid_auth", []
         except OpenCloudConnectionError:
-            return "cannot_connect"
+            return "cannot_connect", []
         except Exception:
             _LOGGER.exception("Unexpected exception validating OpenCloud connection")
-            return "unknown"
-        return None
+            return "unknown", []
+        return None, drives
 
 
 class OpenCloudOptionsFlow(OptionsFlow):
-    """Handle OpenCloud options."""
+    """Handle OpenCloud options in two steps (areas -> specific drives)."""
+
+    def __init__(self) -> None:
+        """Initialize the options flow."""
+        self._options_input: dict[str, Any] = {}
+        self._discovered_drives: list[OpenCloudDrive] = []
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage the integration options."""
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+        """Step 1: choose areas and general options."""
+        errors: dict[str, str] = {}
 
+        if user_input is not None:
+            categories = _categories_from_flags(user_input)
+            self._options_input = {
+                **user_input,
+                CONF_DRIVE_TYPES: categories,
+            }
+            try:
+                client = _create_client(
+                    self.hass,
+                    {**self.config_entry.data, CONF_VERIFY_SSL: user_input[CONF_VERIFY_SSL]},
+                )
+                self._discovered_drives = await client.async_get_drives()
+            except (OpenCloudAuthError, OpenCloudConnectionError):
+                errors["base"] = "cannot_connect"
+            else:
+                return await self.async_step_drives()
+
+        current_categories = set(
+            self.config_entry.options.get(
+                CONF_DRIVE_TYPES,
+                self.config_entry.data.get(CONF_DRIVE_TYPES, ALL_DRIVE_CATEGORIES),
+            )
+        )
+        current_personal = self.config_entry.options.get(
+            CONF_INCLUDE_PERSONAL,
+            self.config_entry.data.get(
+                CONF_INCLUDE_PERSONAL, DRIVE_CATEGORY_PERSONAL in current_categories
+            ),
+        )
+        current_spaces = self.config_entry.options.get(
+            CONF_INCLUDE_SPACES,
+            self.config_entry.data.get(
+                CONF_INCLUDE_SPACES, DRIVE_CATEGORY_SPACES in current_categories
+            ),
+        )
+        current_shares = self.config_entry.options.get(
+            CONF_INCLUDE_SHARES,
+            self.config_entry.data.get(
+                CONF_INCLUDE_SHARES, DRIVE_CATEGORY_SHARES in current_categories
+            ),
+        )
         current_interval = self.config_entry.options.get(
             CONF_SCAN_INTERVAL,
             self.config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
@@ -282,16 +400,12 @@ class OpenCloudOptionsFlow(OptionsFlow):
             CONF_VERIFY_SSL,
             self.config_entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
         )
-        current_drive_types = self.config_entry.options.get(
-            CONF_DRIVE_TYPES,
-            self.config_entry.data.get(CONF_DRIVE_TYPES, ALL_DRIVE_CATEGORIES),
-        )
 
         schema = vol.Schema(
             {
-                vol.Required(
-                    CONF_DRIVE_TYPES, default=current_drive_types
-                ): _build_drive_types_selector(),
+                vol.Required(CONF_INCLUDE_PERSONAL, default=current_personal): bool,
+                vol.Required(CONF_INCLUDE_SPACES, default=current_spaces): bool,
+                vol.Required(CONF_INCLUDE_SHARES, default=current_shares): bool,
                 vol.Required(CONF_SCAN_INTERVAL, default=current_interval): vol.All(
                     vol.Coerce(int),
                     vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
@@ -299,4 +413,50 @@ class OpenCloudOptionsFlow(OptionsFlow):
                 vol.Required(CONF_VERIFY_SSL, default=current_verify_ssl): bool,
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+
+    async def async_step_drives(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Step 2: refine which specific drives/spaces should be integrated."""
+        matching_drives = _filter_drives_by_categories(
+            self._discovered_drives,
+            self._options_input.get(CONF_DRIVE_TYPES, ALL_DRIVE_CATEGORIES),
+        )
+
+        if not matching_drives:
+            return self.async_create_entry(
+                title="",
+                data={**self._options_input, CONF_SELECTED_DRIVES: []},
+            )
+
+        if user_input is not None:
+            return self.async_create_entry(
+                title="",
+                data={
+                    **self._options_input,
+                    CONF_SELECTED_DRIVES: user_input.get(CONF_SELECTED_DRIVES, []),
+                },
+            )
+
+        previous_selected = self.config_entry.options.get(
+            CONF_SELECTED_DRIVES,
+            self.config_entry.data.get(CONF_SELECTED_DRIVES),
+        )
+        matching_ids = [drive.drive_id for drive in matching_drives]
+        if previous_selected is not None:
+            previous_set = set(previous_selected)
+            default_ids = [did for did in matching_ids if did in previous_set]
+            if not default_ids:
+                default_ids = matching_ids
+        else:
+            default_ids = matching_ids
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_SELECTED_DRIVES, default=default_ids
+                ): _build_drives_selector(matching_drives),
+            }
+        )
+        return self.async_show_form(step_id="drives", data_schema=schema)
