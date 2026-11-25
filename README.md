@@ -24,7 +24,7 @@ A custom integration for **Home Assistant** to monitor your **OpenCloud** instan
 ### Home Assistant Marketplace (Recommended)
 
 1. Open **Settings → Marketplace** in Home Assistant.
-2. Add `https://github.com/d.shmt/ha-opencloud-integration` as a custom repository (Category: **Integration**).
+2. Add `https://github.com/d-shmt/ha-opencloud-integration` as a custom repository (Category: **Integration**).
 3. Install **OpenCloud** and restart Home Assistant.
 4. Go to **Settings → Devices & Services → Add Integration** and search for **OpenCloud**.
 
