@@ -39,6 +39,7 @@ class OpenCloudQuota:
     remaining: int
     total: int
     state: str | None
+    deleted: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -50,6 +51,7 @@ class OpenCloudDrive:
     drive_type: str
     drive_alias: str | None
     quota: OpenCloudQuota
+    last_modified: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -58,9 +60,19 @@ class OpenCloudServerInfo:
 
     version: str | None
     edition: str | None
+    maintenance: bool = False
     latest_version: str | None = None
     release_url: str | None = None
     release_summary: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class OpenCloudUserInfo:
+    """Authenticated user metadata from /graph/v1.0/me."""
+
+    display_name: str | None
+    mail: str | None
+    user_id: str | None
 
 
 @dataclass(slots=True, frozen=True)
@@ -69,6 +81,9 @@ class OpenCloudData:
 
     drives: dict[str, OpenCloudDrive]
     server_info: OpenCloudServerInfo | None
+    user_info: OpenCloudUserInfo | None = None
+    user_count: int | None = None
+    group_count: int | None = None
 
 
 class OpenCloudApiClient:
@@ -111,11 +126,19 @@ class OpenCloudApiClient:
 
         return kwargs
 
-    async def _request_json(self, path: str, *, allow_not_found: bool = False) -> Any:
+    async def _request_json(
+        self,
+        path: str,
+        *,
+        allow_not_found: bool = False,
+        allow_forbidden: bool = False,
+    ) -> Any:
         """Perform an authenticated GET request and decode JSON."""
         url = f"{self._base_url}{path}"
         try:
             async with self._session.get(url, **self._build_auth_kwargs()) as response:
+                if response.status == 403 and allow_forbidden:
+                    return None
                 if response.status in (401, 403):
                     raise OpenCloudAuthError(f"Authentication failed with status {response.status}")
                 if allow_not_found and response.status == 404:
@@ -146,11 +169,13 @@ class OpenCloudApiClient:
                 continue
 
             quota_raw = item.get("quota") or {}
+            deleted_raw = quota_raw.get("deleted")
             quota = OpenCloudQuota(
                 used=int(quota_raw.get("used", 0) or 0),
                 remaining=int(quota_raw.get("remaining", 0) or 0),
                 total=int(quota_raw.get("total", 0) or 0),
                 state=quota_raw.get("state"),
+                deleted=int(deleted_raw) if deleted_raw is not None else None,
             )
             drives.append(
                 OpenCloudDrive(
@@ -159,6 +184,7 @@ class OpenCloudApiClient:
                     drive_type=str(item.get("driveType") or "unknown"),
                     drive_alias=item.get("driveAlias"),
                     quota=quota,
+                    last_modified=item.get("lastModifiedDateTime"),
                 )
             )
         return drives
@@ -203,6 +229,7 @@ class OpenCloudApiClient:
         """Fetch server version metadata from status or capabilities endpoints."""
         version: str | None = None
         edition: str | None = None
+        maintenance = False
 
         for path in ("/status.php", "/status", "/config.json"):
             try:
@@ -221,6 +248,8 @@ class OpenCloudApiClient:
                     or data.get("productName")
                     or data.get("productname")
                 )
+                if "maintenance" in data:
+                    maintenance = bool(data.get("maintenance"))
                 if raw_version or raw_edition:
                     version = str(raw_version).lstrip("v") if raw_version else None
                     edition = str(raw_edition) if raw_edition else None
@@ -253,6 +282,8 @@ class OpenCloudApiClient:
                     )
                     if raw_ed:
                         edition = str(raw_ed)
+                if "maintenance" in core_status:
+                    maintenance = bool(core_status.get("maintenance"))
 
         if not version and not edition:
             return None
@@ -263,18 +294,60 @@ class OpenCloudApiClient:
         return OpenCloudServerInfo(
             version=version,
             edition=edition,
+            maintenance=maintenance,
             latest_version=latest_version,
             release_url=release_url,
             release_summary=release_summary,
         )
 
+    async def async_get_user_info(self) -> OpenCloudUserInfo | None:
+        """Fetch authenticated user profile from /graph/v1.0/me."""
+        try:
+            data = await self._request_json(
+                "/graph/v1.0/me", allow_not_found=True, allow_forbidden=True
+            )
+        except OpenCloudConnectionError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        display_name = data.get("displayName") or data.get("onPremisesSamAccountName")
+        mail = data.get("mail")
+        user_id = data.get("id")
+        if not display_name and not mail:
+            return None
+        return OpenCloudUserInfo(
+            display_name=str(display_name) if display_name else None,
+            mail=str(mail) if mail else None,
+            user_id=str(user_id) if user_id else None,
+        )
+
+    async def _async_get_collection_count(self, path: str) -> int | None:
+        """Fetch count of items in a Graph collection endpoint if permitted."""
+        try:
+            data = await self._request_json(
+                path, allow_not_found=True, allow_forbidden=True
+            )
+        except OpenCloudConnectionError:
+            return None
+        if isinstance(data, dict) and isinstance(data.get("value"), list):
+            return len(data["value"])
+        return None
+
     async def async_get_data(self) -> OpenCloudData:
-        """Fetch drives and optional server info."""
+        """Fetch drives, server info, user info, and optional admin counts."""
         drives_list = await self.async_get_drives()
-        server_info = await self.async_get_server_info()
+        server_info, user_info, user_count, group_count = await asyncio.gather(
+            self.async_get_server_info(),
+            self.async_get_user_info(),
+            self._async_get_collection_count("/graph/v1.0/users"),
+            self._async_get_collection_count("/graph/v1.0/groups"),
+        )
         return OpenCloudData(
             drives={drive.drive_id: drive for drive in drives_list},
             server_info=server_info,
+            user_info=user_info,
+            user_count=user_count,
+            group_count=group_count,
         )
 
     async def async_validate_connection(self) -> list[OpenCloudDrive]:

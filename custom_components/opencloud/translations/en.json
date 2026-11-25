@@ -101,8 +101,23 @@
       "drive_count": {
         "name": "Spaces"
       },
+      "total_used_space": {
+        "name": "Total used space"
+      },
       "version": {
         "name": "Version"
+      },
+      "edition": {
+        "name": "Edition"
+      },
+      "account_user": {
+        "name": "Connected account"
+      },
+      "user_count": {
+        "name": "Users"
+      },
+      "group_count": {
+        "name": "Groups"
       },
       "used_space": {
         "name": "Used space"
@@ -124,11 +139,20 @@
           "critical": "Critical",
           "exceeded": "Exceeded"
         }
+      },
+      "trash_space": {
+        "name": "Trash"
+      },
+      "last_modified": {
+        "name": "Last modified"
       }
     },
     "binary_sensor": {
       "connectivity": {
         "name": "Server status"
+      },
+      "maintenance": {
+        "name": "Maintenance mode"
       }
     },
     "update": {

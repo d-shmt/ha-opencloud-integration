@@ -92,4 +92,10 @@ class OpenCloudDataUpdateCoordinator(DataUpdateCoordinator[OpenCloudData]):
                 )
                 in selected_categories
             }
-        return OpenCloudData(drives=filtered_drives, server_info=data.server_info)
+        return OpenCloudData(
+            drives=filtered_drives,
+            server_info=data.server_info,
+            user_info=data.user_info,
+            user_count=data.user_count,
+            group_count=data.group_count,
+        )

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -16,6 +18,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .api import OpenCloudData, OpenCloudDrive
 from .const import DOMAIN, QUOTA_STATES, format_drive_type
@@ -27,13 +30,16 @@ class OpenCloudServerSensorDescription(SensorEntityDescription):
     """Describes an OpenCloud server-level sensor."""
 
     value_fn: Callable[[OpenCloudData], str | int | None]
+    exists_fn: Callable[[OpenCloudData], bool] = lambda data: True
+    attrs_fn: Callable[[OpenCloudData], dict[str, Any] | None] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
 class OpenCloudDriveSensorDescription(SensorEntityDescription):
     """Describes an OpenCloud drive-level sensor."""
 
-    value_fn: Callable[[OpenCloudDrive], str | int | float | None]
+    value_fn: Callable[[OpenCloudDrive], str | int | float | datetime | None]
+    exists_fn: Callable[[OpenCloudDrive], bool] = lambda drive: True
 
 
 def _calculate_usage_percent(drive: OpenCloudDrive) -> float | None:
@@ -48,6 +54,13 @@ def _calculate_usage_percent(drive: OpenCloudDrive) -> float | None:
     return None
 
 
+def _parse_last_modified(drive: OpenCloudDrive) -> datetime | None:
+    """Parse ISO-8601 lastModifiedDateTime into a timezone-aware datetime."""
+    if not drive.last_modified:
+        return None
+    return dt_util.parse_datetime(drive.last_modified)
+
+
 SERVER_SENSORS: tuple[OpenCloudServerSensorDescription, ...] = (
     OpenCloudServerSensorDescription(
         key="drive_count",
@@ -57,11 +70,71 @@ SERVER_SENSORS: tuple[OpenCloudServerSensorDescription, ...] = (
         value_fn=lambda data: len(data.drives),
     ),
     OpenCloudServerSensorDescription(
+        key="total_used",
+        translation_key="total_used_space",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
+        suggested_display_precision=2,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:harddisk",
+        value_fn=lambda data: sum(drive.quota.used for drive in data.drives.values()),
+    ),
+    OpenCloudServerSensorDescription(
         key="version",
         translation_key="version",
         icon="mdi:information-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.server_info.version if data.server_info else None,
+        exists_fn=lambda data: bool(data.server_info and data.server_info.version),
+    ),
+    OpenCloudServerSensorDescription(
+        key="edition",
+        translation_key="edition",
+        icon="mdi:tag-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: data.server_info.edition if data.server_info else None,
+        exists_fn=lambda data: bool(data.server_info and data.server_info.edition),
+    ),
+    OpenCloudServerSensorDescription(
+        key="account_user",
+        translation_key="account_user",
+        icon="mdi:account",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: (
+            (data.user_info.display_name or data.user_info.mail)
+            if data.user_info
+            else None
+        ),
+        exists_fn=lambda data: data.user_info is not None,
+        attrs_fn=lambda data: (
+            {
+                k: v
+                for k, v in {
+                    "email": data.user_info.mail,
+                    "user_id": data.user_info.user_id,
+                }.items()
+                if v is not None
+            }
+            if data.user_info
+            else None
+        ),
+    ),
+    OpenCloudServerSensorDescription(
+        key="user_count",
+        translation_key="user_count",
+        icon="mdi:account-group",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: data.user_count,
+        exists_fn=lambda data: data.user_count is not None,
+    ),
+    OpenCloudServerSensorDescription(
+        key="group_count",
+        translation_key="group_count",
+        icon="mdi:account-multiple",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: data.group_count,
+        exists_fn=lambda data: data.group_count is not None,
     ),
 )
 
@@ -120,6 +193,26 @@ DRIVE_SENSORS: tuple[OpenCloudDriveSensorDescription, ...] = (
             else None
         ),
     ),
+    OpenCloudDriveSensorDescription(
+        key="trash_space",
+        translation_key="trash_space",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
+        suggested_display_precision=2,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:delete-outline",
+        value_fn=lambda drive: drive.quota.deleted,
+        exists_fn=lambda drive: drive.quota.deleted is not None,
+    ),
+    OpenCloudDriveSensorDescription(
+        key="last_modified",
+        translation_key="last_modified",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:clock-outline",
+        value_fn=_parse_last_modified,
+        exists_fn=lambda drive: drive.last_modified is not None,
+    ),
 )
 
 
@@ -134,8 +227,7 @@ async def async_setup_entry(
     entities: list[SensorEntity] = [
         OpenCloudServerSensor(coordinator, entry, description)
         for description in SERVER_SENSORS
-        if description.key != "version"
-        or (coordinator.data.server_info and coordinator.data.server_info.version)
+        if description.exists_fn(coordinator.data)
     ]
 
     known_drive_ids: set[str] = set()
@@ -143,14 +235,15 @@ async def async_setup_entry(
     @callback
     def _async_add_new_drives() -> None:
         new_entities: list[SensorEntity] = []
-        for drive_id in coordinator.data.drives:
+        for drive_id, drive in coordinator.data.drives.items():
             if drive_id in known_drive_ids:
                 continue
             known_drive_ids.add(drive_id)
             for description in DRIVE_SENSORS:
-                new_entities.append(
-                    OpenCloudDriveSensor(coordinator, entry, drive_id, description)
-                )
+                if description.exists_fn(drive):
+                    new_entities.append(
+                        OpenCloudDriveSensor(coordinator, entry, drive_id, description)
+                    )
         if new_entities:
             async_add_entities(new_entities)
 
@@ -188,6 +281,13 @@ class OpenCloudServerSensor(
     def native_value(self) -> str | int | None:
         """Return the sensor value."""
         return self.entity_description.value_fn(self.coordinator.data)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return optional extra state attributes."""
+        if self.entity_description.attrs_fn is None:
+            return None
+        return self.entity_description.attrs_fn(self.coordinator.data)
 
 
 class OpenCloudDriveSensor(
@@ -228,7 +328,7 @@ class OpenCloudDriveSensor(
         return super().available and self._drive_id in self.coordinator.data.drives
 
     @property
-    def native_value(self) -> str | int | float | None:
+    def native_value(self) -> str | int | float | datetime | None:
         """Return the sensor value for this drive."""
         drive = self.coordinator.data.drives.get(self._drive_id)
         if drive is None:

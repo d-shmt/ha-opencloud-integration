@@ -22,7 +22,13 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up OpenCloud binary sensors from a config entry."""
-    async_add_entities([OpenCloudConnectivitySensor(entry.runtime_data, entry)])
+    coordinator = entry.runtime_data
+    entities: list[BinarySensorEntity] = [
+        OpenCloudConnectivitySensor(coordinator, entry),
+    ]
+    if coordinator.data.server_info is not None:
+        entities.append(OpenCloudMaintenanceSensor(coordinator, entry))
+    async_add_entities(entities)
 
 
 class OpenCloudConnectivitySensor(
@@ -59,3 +65,35 @@ class OpenCloudConnectivitySensor(
     def is_on(self) -> bool:
         """Return True if the last coordinator update succeeded."""
         return self.coordinator.last_update_success
+
+
+class OpenCloudMaintenanceSensor(
+    CoordinatorEntity[OpenCloudDataUpdateCoordinator], BinarySensorEntity
+):
+    """Binary sensor indicating whether OpenCloud is in maintenance mode."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "maintenance"
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: OpenCloudDataUpdateCoordinator,
+        entry: OpenCloudConfigEntry,
+    ) -> None:
+        """Initialize the maintenance sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_server_maintenance"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.entry_id}_server")},
+            name=entry.title,
+            manufacturer="OpenCloud",
+            entry_type=DeviceEntryType.SERVICE,
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if OpenCloud reports maintenance mode."""
+        server_info = self.coordinator.data.server_info
+        return server_info.maintenance if server_info else None
