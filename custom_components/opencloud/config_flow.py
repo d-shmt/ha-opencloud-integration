@@ -56,6 +56,7 @@ from .const import (
     DRIVE_TYPE_TO_CATEGORY,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
+    format_drive_type,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -119,7 +120,7 @@ def _build_drives_selector(drives: list[OpenCloudDrive]) -> SelectSelector:
             options=[
                 SelectOptionDict(
                     value=drive.drive_id,
-                    label=f"{drive.name} ({drive.drive_type})",
+                    label=f"{drive.name} ({format_drive_type(drive.drive_type)})",
                 )
                 for drive in drives
             ],

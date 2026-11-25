@@ -18,7 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import OpenCloudData, OpenCloudDrive
-from .const import DOMAIN, QUOTA_STATES
+from .const import DOMAIN, QUOTA_STATES, format_drive_type
 from .coordinator import OpenCloudConfigEntry, OpenCloudDataUpdateCoordinator
 
 
@@ -210,13 +210,14 @@ class OpenCloudDriveSensor(
         self.entity_description = description
         self._drive_id = drive_id
         drive = coordinator.data.drives[drive_id]
+        drive_label = format_drive_type(drive.drive_type)
 
         self._attr_unique_id = f"{entry.entry_id}_{drive_id}_{description.key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry.entry_id}_{drive_id}")},
-            name=f"{drive.name} ({drive.drive_type})",
+            name=f"{drive.name} ({drive_label})",
             manufacturer="OpenCloud",
-            model=f"Drive ({drive.drive_type})",
+            model=f"Drive ({drive_label})",
             via_device=(DOMAIN, f"{entry.entry_id}_server"),
             entry_type=DeviceEntryType.SERVICE,
         )

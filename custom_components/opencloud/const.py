@@ -39,6 +39,21 @@ DRIVE_TYPE_TO_CATEGORY: dict[str, str] = {
     "virtual": DRIVE_CATEGORY_SHARES,
 }
 
+DRIVE_TYPE_LABELS: dict[str, str] = {
+    "personal": "Personal",
+    "project": "Space",
+    "projectspaces": "Space",
+    "share": "Shares",
+    "shares": "Shares",
+    "mountpoint": "Shares",
+    "virtual": "Shares",
+}
+
+
+def format_drive_type(drive_type: str) -> str:
+    """Return a user-friendly label for an OpenCloud driveType."""
+    return DRIVE_TYPE_LABELS.get(drive_type.lower(), drive_type.capitalize())
+
 DEFAULT_SCAN_INTERVAL = 300
 MIN_SCAN_INTERVAL = 30
 MAX_SCAN_INTERVAL = 3600
