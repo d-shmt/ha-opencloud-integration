@@ -29,6 +29,7 @@ DRIVE_TYPE_TO_CATEGORY: dict[str, str] = {
     "personal": DRIVE_CATEGORY_PERSONAL,
     "project": DRIVE_CATEGORY_SPACES,
     "projectspaces": DRIVE_CATEGORY_SPACES,
+    "share": DRIVE_CATEGORY_SHARES,
     "shares": DRIVE_CATEGORY_SHARES,
     "mountpoint": DRIVE_CATEGORY_SHARES,
     "virtual": DRIVE_CATEGORY_SHARES,

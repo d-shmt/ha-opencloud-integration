@@ -9,6 +9,7 @@ from homeassistant.const import (
     CONF_VERIFY_SSL,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import OpenCloudApiClient
@@ -42,11 +43,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenCloudConfigEntry) ->
     coordinator = OpenCloudDataUpdateCoordinator(hass, entry, client)
     await coordinator.async_config_entry_first_refresh()
 
+    _async_cleanup_removed_drives(hass, entry, coordinator)
+
     entry.runtime_data = coordinator
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+def _async_cleanup_removed_drives(
+    hass: HomeAssistant,
+    entry: OpenCloudConfigEntry,
+    coordinator: OpenCloudDataUpdateCoordinator,
+) -> None:
+    """Remove devices for drives that are no longer selected or present."""
+    device_registry = dr.async_get(hass)
+    valid_identifiers = {f"{entry.entry_id}_server"} | {
+        f"{entry.entry_id}_{drive_id}" for drive_id in coordinator.data.drives
+    }
+    for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+        for domain, identifier in device.identifiers:
+            if domain == DOMAIN and identifier not in valid_identifiers:
+                device_registry.async_remove_device(device.id)
+                break
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: OpenCloudConfigEntry) -> None:
