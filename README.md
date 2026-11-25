@@ -1,7 +1,5 @@
 # OpenCloud for Home Assistant
 
-[![Validate](https://github.com/d-shmt/ha-opencloud-integration/actions/workflows/validate.yml/badge.svg)](https://github.com/d-shmt/ha-opencloud-integration/actions/workflows/validate.yml)
-
 A custom integration for **Home Assistant** to monitor your **OpenCloud** instance and storage spaces (drives) via the OpenCloud Graph API (`/graph/v1.0/me/drives`).
 
 ## Features
