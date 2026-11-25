@@ -18,6 +18,7 @@ from .const import (
     CONF_AUTH_TYPE,
     CONF_TOKEN,
     DEFAULT_VERIFY_SSL,
+    DOMAIN,
     PLATFORMS,
 )
 from .coordinator import OpenCloudConfigEntry, OpenCloudDataUpdateCoordinator
