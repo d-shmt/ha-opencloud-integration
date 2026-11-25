@@ -1,6 +1,7 @@
 {
   "domain": "opencloud",
   "name": "OpenCloud",
+  "categories": ["computers_and_network", "computers_and_network.monitoring"],
   "codeowners": ["@d-shmt"],
   "config_flow": true,
   "documentation": "https://github.com/d-shmt/ha-opencloud-integration",
@@ -8,5 +9,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/d-shmt/ha-opencloud-integration/issues",
   "requirements": [],
-  "version": "0.5.1"
+  "version": "0.5.2"
 }
