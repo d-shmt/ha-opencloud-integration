@@ -23,6 +23,13 @@
           "token": "Bearer-Token"
         }
       },
+      "drives": {
+        "title": "OpenCloud-Bereiche auswählen",
+        "description": "Wähle aus, welche OpenCloud-Bereiche als Geräte und Sensoren integriert werden sollen.",
+        "data": {
+          "drive_types": "Zu integrierende Bereiche"
+        }
+      },
       "reauth_confirm": {
         "title": "OpenCloud erneut authentifizieren",
         "description": "Deine OpenCloud-Zugangsdaten sind nicht mehr gültig. Bitte gib aktualisierte Zugangsdaten ein.",
@@ -50,6 +57,13 @@
         "basic": "Benutzername & App-Token / Passwort (Basic Auth)",
         "token": "Bearer-Token (OIDC / API-Token)"
       }
+    },
+    "drive_types": {
+      "options": {
+        "personal": "Persönlich",
+        "spaces": "Spaces (Projekt-Spaces)",
+        "shares": "Shares (Geteilte Bereiche)"
+      }
     }
   },
   "options": {
@@ -57,6 +71,7 @@
       "init": {
         "title": "OpenCloud-Optionen",
         "data": {
+          "drive_types": "Zu integrierende Bereiche",
           "scan_interval": "Abfrageintervall (Sekunden)",
           "verify_ssl": "SSL-Zertifikat prüfen"
         }

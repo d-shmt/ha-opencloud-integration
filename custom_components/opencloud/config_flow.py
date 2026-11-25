@@ -36,13 +36,18 @@ from .api import (
     OpenCloudConnectionError,
 )
 from .const import (
+    ALL_DRIVE_CATEGORIES,
     AUTH_TYPE_BASIC,
     AUTH_TYPE_TOKEN,
     CONF_AUTH_TYPE,
+    CONF_DRIVE_TYPES,
     CONF_TOKEN,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_VERIFY_SSL,
     DOMAIN,
+    DRIVE_CATEGORY_PERSONAL,
+    DRIVE_CATEGORY_SHARES,
+    DRIVE_CATEGORY_SPACES,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
 )
@@ -59,6 +64,22 @@ def _is_valid_url(url: str) -> bool:
     """Return True if URL has http or https scheme and a host."""
     parsed = urlparse(url)
     return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+
+
+def _build_drive_types_selector() -> SelectSelector:
+    """Build multi-select selector for OpenCloud drive categories."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=[
+                SelectOptionDict(value=DRIVE_CATEGORY_PERSONAL, label="personal"),
+                SelectOptionDict(value=DRIVE_CATEGORY_SPACES, label="spaces"),
+                SelectOptionDict(value=DRIVE_CATEGORY_SHARES, label="shares"),
+            ],
+            multiple=True,
+            mode=SelectSelectorMode.LIST,
+            translation_key="drive_types",
+        )
+    )
 
 
 class OpenCloudConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -127,13 +148,12 @@ class OpenCloudConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = error
             else:
                 url = data[CONF_URL]
-                host = urlparse(url).netloc
                 identity = data.get(CONF_USERNAME) or "token"
                 await self.async_set_unique_id(f"{url}|{identity}")
                 self._abort_if_unique_id_configured()
 
-                title = f"OpenCloud ({host})"
-                return self.async_create_entry(title=title, data=data)
+                self._user_input = data
+                return await self.async_step_drives()
 
         if auth_type == AUTH_TYPE_TOKEN:
             schema = vol.Schema({vol.Required(CONF_TOKEN): str})
@@ -150,6 +170,27 @@ class OpenCloudConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=schema,
             errors=errors,
         )
+
+    async def async_step_drives(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Select which OpenCloud drive categories to integrate."""
+        if user_input is not None:
+            data = {
+                **self._user_input,
+                CONF_DRIVE_TYPES: user_input.get(CONF_DRIVE_TYPES, ALL_DRIVE_CATEGORIES),
+            }
+            host = urlparse(data[CONF_URL]).netloc
+            return self.async_create_entry(title=f"OpenCloud ({host})", data=data)
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_DRIVE_TYPES, default=ALL_DRIVE_CATEGORIES
+                ): _build_drive_types_selector(),
+            }
+        )
+        return self.async_show_form(step_id="drives", data_schema=schema)
 
     async def async_step_reauth(
         self, entry_data: dict[str, Any]
@@ -241,9 +282,16 @@ class OpenCloudOptionsFlow(OptionsFlow):
             CONF_VERIFY_SSL,
             self.config_entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
         )
+        current_drive_types = self.config_entry.options.get(
+            CONF_DRIVE_TYPES,
+            self.config_entry.data.get(CONF_DRIVE_TYPES, ALL_DRIVE_CATEGORIES),
+        )
 
         schema = vol.Schema(
             {
+                vol.Required(
+                    CONF_DRIVE_TYPES, default=current_drive_types
+                ): _build_drive_types_selector(),
                 vol.Required(CONF_SCAN_INTERVAL, default=current_interval): vol.All(
                     vol.Coerce(int),
                     vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),

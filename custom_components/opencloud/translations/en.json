@@ -23,6 +23,13 @@
           "token": "Bearer Token"
         }
       },
+      "drives": {
+        "title": "Select OpenCloud Areas",
+        "description": "Choose which OpenCloud storage areas should be integrated as devices and sensors.",
+        "data": {
+          "drive_types": "Areas to integrate"
+        }
+      },
       "reauth_confirm": {
         "title": "Re-authenticate OpenCloud",
         "description": "Your OpenCloud credentials are no longer valid. Please enter updated credentials.",
@@ -50,6 +57,13 @@
         "basic": "Username & App Token / Password (Basic Auth)",
         "token": "Bearer Token (OIDC / API Token)"
       }
+    },
+    "drive_types": {
+      "options": {
+        "personal": "Personal",
+        "spaces": "Spaces (Project Spaces)",
+        "shares": "Shares"
+      }
     }
   },
   "options": {
@@ -57,6 +71,7 @@
       "init": {
         "title": "OpenCloud Options",
         "data": {
+          "drive_types": "Areas to integrate",
           "scan_interval": "Update interval (seconds)",
           "verify_ssl": "Verify SSL certificate"
         }
