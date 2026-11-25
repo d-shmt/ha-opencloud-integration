@@ -10,7 +10,7 @@
           "verify_ssl": "Verify SSL certificate"
         },
         "data_description": {
-          "url": "Full URL including https:// (e.g. https://cloud.example.com)",
+          "url": "Full URL including protocol (e.g. cloud.example.com)",
           "verify_ssl": "Disable only if using a self-signed certificate"
         }
       },

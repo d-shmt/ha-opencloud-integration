@@ -10,7 +10,7 @@
           "verify_ssl": "SSL-Zertifikat prüfen"
         },
         "data_description": {
-          "url": "Vollständige URL inklusive https:// (z. B. https://cloud.example.com)",
+          "url": "Vollständige URL inklusive Protokoll (z. B. cloud.example.com)",
           "verify_ssl": "Nur bei selbstsignierten Zertifikaten deaktivieren"
         }
       },
