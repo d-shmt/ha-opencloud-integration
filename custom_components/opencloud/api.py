@@ -67,21 +67,11 @@ class OpenCloudServerInfo:
 
 
 @dataclass(slots=True, frozen=True)
-class OpenCloudUserInfo:
-    """Authenticated user metadata from /graph/v1.0/me."""
-
-    display_name: str | None
-    mail: str | None
-    user_id: str | None
-
-
-@dataclass(slots=True, frozen=True)
 class OpenCloudData:
     """Aggregated data fetched by the coordinator."""
 
     drives: dict[str, OpenCloudDrive]
     server_info: OpenCloudServerInfo | None
-    user_info: OpenCloudUserInfo | None = None
     user_count: int | None = None
     group_count: int | None = None
 
@@ -98,9 +88,11 @@ class OpenCloudApiClient:
         password: str | None = None,
         token: str | None = None,
         verify_ssl: bool = True,
+        github_session: aiohttp.ClientSession | None = None,
     ) -> None:
         """Initialize the OpenCloud API client."""
         self._session = session
+        self._github_session = github_session or (session if verify_ssl else None)
         self._base_url = base_url.rstrip("/")
         self._auth_type = auth_type
         self._username = username
@@ -191,6 +183,9 @@ class OpenCloudApiClient:
 
     async def async_get_latest_release(self) -> tuple[str | None, str | None, str | None]:
         """Fetch latest OpenCloud release metadata from GitHub (cached)."""
+        if self._github_session is None:
+            return self._cached_release
+
         now = time.monotonic()
         if (
             self._last_release_check > 0
@@ -203,7 +198,7 @@ class OpenCloudApiClient:
             "User-Agent": "ha-opencloud-integration",
         }
         try:
-            async with self._session.get(
+            async with self._github_session.get(
                 GITHUB_RELEASES_URL, headers=headers, timeout=REQUEST_TIMEOUT
             ) as response:
                 if response.status != 200:
@@ -300,27 +295,6 @@ class OpenCloudApiClient:
             release_summary=release_summary,
         )
 
-    async def async_get_user_info(self) -> OpenCloudUserInfo | None:
-        """Fetch authenticated user profile from /graph/v1.0/me."""
-        try:
-            data = await self._request_json(
-                "/graph/v1.0/me", allow_not_found=True, allow_forbidden=True
-            )
-        except OpenCloudConnectionError:
-            return None
-        if not isinstance(data, dict):
-            return None
-        display_name = data.get("displayName") or data.get("onPremisesSamAccountName")
-        mail = data.get("mail")
-        user_id = data.get("id")
-        if not display_name and not mail:
-            return None
-        return OpenCloudUserInfo(
-            display_name=str(display_name) if display_name else None,
-            mail=str(mail) if mail else None,
-            user_id=str(user_id) if user_id else None,
-        )
-
     async def _async_get_collection_count(self, path: str) -> int | None:
         """Fetch count of items in a Graph collection endpoint if permitted."""
         try:
@@ -334,18 +308,16 @@ class OpenCloudApiClient:
         return None
 
     async def async_get_data(self) -> OpenCloudData:
-        """Fetch drives, server info, user info, and optional admin counts."""
+        """Fetch drives, server info, and optional admin counts."""
         drives_list = await self.async_get_drives()
-        server_info, user_info, user_count, group_count = await asyncio.gather(
+        server_info, user_count, group_count = await asyncio.gather(
             self.async_get_server_info(),
-            self.async_get_user_info(),
             self._async_get_collection_count("/graph/v1.0/users"),
             self._async_get_collection_count("/graph/v1.0/groups"),
         )
         return OpenCloudData(
             drives={drive.drive_id: drive for drive in drives_list},
             server_info=server_info,
-            user_info=user_info,
             user_count=user_count,
             group_count=group_count,
         )

@@ -292,8 +292,14 @@ class OpenCloudConfigFlow(ConfigFlow, domain=DOMAIN):
         auth_type = self._reauth_entry.data.get(CONF_AUTH_TYPE, AUTH_TYPE_BASIC)
 
         if user_input is not None:
+            verify_ssl = self._reauth_entry.options.get(
+                CONF_VERIFY_SSL,
+                self._reauth_entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+            )
             updated_data = {**self._reauth_entry.data, **user_input}
-            error, _ = await self._async_validate_input(updated_data)
+            error, _ = await self._async_validate_input(
+                {**updated_data, CONF_VERIFY_SSL: verify_ssl}
+            )
             if error:
                 errors["base"] = error
             else:

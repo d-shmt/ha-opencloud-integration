@@ -110,9 +110,6 @@
       "edition": {
         "name": "Edition"
       },
-      "account_user": {
-        "name": "Verbundener Account"
-      },
       "user_count": {
         "name": "Benutzer"
       },

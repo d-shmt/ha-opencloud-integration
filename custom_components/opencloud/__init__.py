@@ -31,6 +31,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenCloudConfigEntry) ->
         entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
     )
     session = async_get_clientsession(hass, verify_ssl=verify_ssl)
+    github_session = async_get_clientsession(hass)
     client = OpenCloudApiClient(
         session=session,
         base_url=entry.data[CONF_URL],
@@ -39,6 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenCloudConfigEntry) ->
         password=entry.data.get(CONF_PASSWORD),
         token=entry.data.get(CONF_TOKEN),
         verify_ssl=verify_ssl,
+        github_session=github_session,
     )
 
     coordinator = OpenCloudDataUpdateCoordinator(hass, entry, client)

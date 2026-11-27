@@ -95,7 +95,6 @@ class OpenCloudDataUpdateCoordinator(DataUpdateCoordinator[OpenCloudData]):
         return OpenCloudData(
             drives=filtered_drives,
             server_info=data.server_info,
-            user_info=data.user_info,
             user_count=data.user_count,
             group_count=data.group_count,
         )

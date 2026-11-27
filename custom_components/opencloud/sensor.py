@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -31,7 +30,6 @@ class OpenCloudServerSensorDescription(SensorEntityDescription):
 
     value_fn: Callable[[OpenCloudData], str | int | None]
     exists_fn: Callable[[OpenCloudData], bool] = lambda data: True
-    attrs_fn: Callable[[OpenCloudData], dict[str, Any] | None] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -95,30 +93,6 @@ SERVER_SENSORS: tuple[OpenCloudServerSensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.server_info.edition if data.server_info else None,
         exists_fn=lambda data: bool(data.server_info and data.server_info.edition),
-    ),
-    OpenCloudServerSensorDescription(
-        key="account_user",
-        translation_key="account_user",
-        icon="mdi:account",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: (
-            (data.user_info.display_name or data.user_info.mail)
-            if data.user_info
-            else None
-        ),
-        exists_fn=lambda data: data.user_info is not None,
-        attrs_fn=lambda data: (
-            {
-                k: v
-                for k, v in {
-                    "email": data.user_info.mail,
-                    "user_id": data.user_info.user_id,
-                }.items()
-                if v is not None
-            }
-            if data.user_info
-            else None
-        ),
     ),
     OpenCloudServerSensorDescription(
         key="user_count",
@@ -281,13 +255,6 @@ class OpenCloudServerSensor(
     def native_value(self) -> str | int | None:
         """Return the sensor value."""
         return self.entity_description.value_fn(self.coordinator.data)
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Return optional extra state attributes."""
-        if self.entity_description.attrs_fn is None:
-            return None
-        return self.entity_description.attrs_fn(self.coordinator.data)
 
 
 class OpenCloudDriveSensor(
